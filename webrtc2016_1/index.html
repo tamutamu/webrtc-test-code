@@ -72,11 +72,10 @@
     function startVideo() {
         getDeviceStream({ video: true, audio: false })
             .then(function (stream) { // success
-                localStream = stream;
-                localVideo.src = window.URL.createObjectURL(localStream);
+                localVideo.srcObject = stream;
 
-                document.getElementById('rotate_video').src = localVideo.src;
-                document.getElementById('shake_video').src = localVideo.src;
+                document.getElementById('rotate_video').srcObject = localVideo.srcObject;
+                document.getElementById('shake_video').srcObject = localVideo.srcObject;
             }).catch(function (error) { // error
                 console.error('mediaDevice.getUserMedia() error:', error);
                 return;
