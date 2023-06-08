@@ -8,7 +8,7 @@ var server = http.createServer(function (req, res) {
 
 var io = socketio(server);
 
-io.sockets.on('connection', function (socket) {
+var chat = io.of('/chat').on('connection', function (socket) {
     var name;
     var room;
 
@@ -18,7 +18,7 @@ io.sockets.on('connection', function (socket) {
     });
 
     socket.on('client_to_server', function (data) {
-        io.to(room).emit('server_to_client', { value: data.value });
+        chat.to(room).emit('server_to_client', { value: data.value });
     });
 
     socket.on('client_to_server_broadcast', function (data) {
@@ -29,7 +29,7 @@ io.sockets.on('connection', function (socket) {
         var id = socket.id;
         name = data.value;
         var personalMessage = "あなたは、" + name + "さんとして入室しました。"
-        io.to(id).emit('server_to_client', { value: personalMessage })
+        chat.to(id).emit('server_to_client', { value: personalMessage })
     });
 
     socket.on('disconnect', function () {
@@ -37,7 +37,16 @@ io.sockets.on('connection', function (socket) {
             console.log("未入室のまま、どこかへ去っていきました。");
         } else {
             var endMessage = name + "さんが退出しました。"
-            io.to(room).emit('server_to_client', { value: endMessage });
+            chat.to(room).emit('server_to_client', { value: endMessage });
         }
     });
+});
+
+
+var fortune = io.of('/fortune').on('connection', function (socket) {
+    var id = socket.id;
+    var fortunes = ["大吉", "吉", "中吉", "小吉", "末吉", "凶", "大凶"];
+    var selectedFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+    var todaysFortune = "今日のあなたの運勢は… " + selectedFortune + " です。"
+    fortune.to(id).emit('server_to_client', { value: todaysFortune });
 });
