@@ -10,13 +10,19 @@ var io = socketio(server);
 
 io.sockets.on('connection', function (socket) {
     var name;
+    var room;
+
+    socket.on('client_to_server_join', function (data) {
+        room = data.value;
+        socket.join(room);
+    });
 
     socket.on('client_to_server', function (data) {
-        io.sockets.emit('server_to_client', { value: data.value });
+        io.to(room).emit('server_to_client', { value: data.value });
     });
 
     socket.on('client_to_server_broadcast', function (data) {
-        socket.broadcast.emit('server_to_client', { value: data.value });
+        socket.broadcast.to(room).emit('server_to_client', { value: data.value });
     });
 
     socket.on('client_to_server_personal', function (data) {
@@ -31,7 +37,7 @@ io.sockets.on('connection', function (socket) {
             console.log("未入室のまま、どこかへ去っていきました。");
         } else {
             var endMessage = name + "さんが退出しました。"
-            io.sockets.emit('server_to_client', { value: endMessage });
+            io.to(room).emit('server_to_client', { value: endMessage });
         }
     });
 });
