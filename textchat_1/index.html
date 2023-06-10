@@ -153,12 +153,15 @@
 
     // ---- for multi party -----
     function isReadyToConnect() {
+        /***
         if (localStream) {
             return true;
         }
         else {
             return false;
         }
+        ***/
+        return true;
     }
 
     // --- RTCPeerConnections ---
@@ -398,7 +401,7 @@
 
         // メッセージをDataChannelを通して相手に直接送信
         console.log("- Send Message through DataChannel");
-        peerConnection.datachannel.send("test");
+        peerConnection.datachannel.send(JSON.stringify({ type: "message", data: g_elementTextMessageForSend.value }));
 
         // 送信メッセージをメッセージテキストエリアへ追加
         g_elementTextareaMessageReceived.value = g_elementTextMessageForSend.value + "\n" + g_elementTextareaMessageReceived.value; // 一番上に追加
@@ -464,6 +467,7 @@
         }
 
         // --- on get remote stream ---
+        /***
         if ('ontrack' in peerConnection) {
             peerConnection.ontrack = function (event) {
                 let stream = event.streams[0];
@@ -485,6 +489,7 @@
                 attachVideo(id, stream);
             };
         }
+        ***/
 
         // --- on get local ICE candidate
         peerConnection.onicecandidate = function (evt) {
@@ -536,15 +541,18 @@
             console.log('==***== connection state=' + peerConnection.connectionState);
         };
 
+        /***
         peerConnection.onremovestream = function (event) {
             console.log('-- peer.onremovestream()');
             //pauseVideo(remoteVideo);
             deleteRemoteStream(id);
             detachVideo(id);
         };
+        ***/
 
 
         // -- add local stream --
+        /***
         if (localStream) {
             console.log('Adding local stream...');
             peerConnection.addStream(localStream);
@@ -552,6 +560,7 @@
         else {
             console.warn('no local stream, but continue.');
         }
+        ***/
 
         return peerConnection;
     }
