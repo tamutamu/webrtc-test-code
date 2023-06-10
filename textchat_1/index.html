@@ -28,18 +28,11 @@
     <div>
         <video id="local_video" autoplay style="width: 160px; height: 120px; border: 1px solid black;"></video>
     </div>
-    <div id="container">
-    </div>
-    <!--
-  <p>SDP to send:<br />
-    <textarea id="text_for_send_sdp" rows="5" cols="60" readonly="readonly">SDP to send</textarea>
-  </p>
-  <p>SDP received:&nbsp;
-    <button type="button" onclick="onSdpText();">Receive remote SDP</button>
-    <br />
-    <textarea id="text_for_receive_sdp" rows="5" cols="60"></textarea>
-  </p>
-  -->
+    <div id="container"> </div>
+    <form action="" onsubmit="event.preventDefault();onsubmitButton_SendMessage();">
+        <input type="text" id="text_message_for_send" size="40" /><input type="submit" value="Send message" />
+    </form>
+    <textarea id="textarea_message_received" rows="10" cols="60" readonly="readonly"></textarea>
 </body>
 <script type="text/javascript">
     let localVideo = document.getElementById('local_video');
@@ -69,13 +62,20 @@
     let port = 3002;
     let socket = io.connect('http://localhost:' + port + '/');
     let room = getRoomName();
+
     socket.on('connect', function (evt) {
         console.log('socket.io connected. enter room=' + room);
         socket.emit('enter', room);
     });
+
+    var G_ID = 0;
+
+    var g_connect_myself = true;
+
     socket.on('message', function (message) {
         console.log('message:', message);
         let fromId = message.from;
+        G_ID = fromId;
 
         if (message.type === 'offer') {
             // -- got offer ---
@@ -200,8 +200,16 @@
         detachVideo(id);
 
         if (isConnectedWith(id)) {
-            let peer = getConnection(id);
-            peer.close();
+
+            let peerConnection = getConnection(id);
+
+            // DataChannelの終了
+            if ("datachannel" in peerConnection) {
+                peerConnection.datachannel.close();
+                peerConnection.datachannel = null;
+            }
+
+            peerConnection.close();
             deleteConnection(id);
         }
     }
@@ -367,14 +375,97 @@
         }
     }
 
+    const g_elementTextMessageForSend = document.getElementById("text_message_for_send");
+
+    function onsubmitButton_SendMessage() {
+        console.log("UI Event : 'Send Message' button clicked.");
+
+        let peerConnection = getConnection(G_ID);
+
+        if (!peerConnection) {   // コネクションオブジェクトがない
+            alert("Connection object does not exist.");
+            return;
+        }
+        //if (!isDataChannelOpen(peerConnection)) {   // DataChannelオブジェクトが開いていない
+        //    alert("Datachannel is not open.");
+        //    return;
+        //}
+
+        if (!g_elementTextMessageForSend.value) {
+            alert("Message for send is empty. Please enter the message for send.");
+            return;
+        }
+
+        // メッセージをDataChannelを通して相手に直接送信
+        console.log("- Send Message through DataChannel");
+        peerConnection.datachannel.send("test");
+
+        // 送信メッセージをメッセージテキストエリアへ追加
+        g_elementTextareaMessageReceived.value = g_elementTextMessageForSend.value + "\n" + g_elementTextareaMessageReceived.value; // 一番上に追加
+        //g_elementTextareaMessageReceived.value += g_elementTextMessageForSend.value + "\n"; // 一番下に追加
+        g_elementTextMessageForSend.value = "";
+    }
+
+    const g_elementTextareaMessageReceived = document.getElementById("textarea_message_received");
+
+    function setupDataChannelEventHandler(_peer) {
+        if (!("datachannel" in _peer)) {
+            console.error("Unexpected : DataChannel does not exist.");
+            return;
+        }
+
+        // message イベントが発生したときのイベントハンドラ
+        _peer.rv_datachannel.onmessage = (event) => {
+            console.log("DataChannel Event : message");
+            let objData = JSON.parse(event.data);
+            console.log("- type : ", objData.type);
+            console.log("- data : ", objData.data);
+
+            if ("message" === objData.type) {
+                // 受信メッセージをメッセージテキストエリアへ追加
+                let strMessage = objData.data;
+                g_elementTextareaMessageReceived.value = strMessage + "\n" + g_elementTextareaMessageReceived.value; // 一番上に追加
+                //g_elementTextareaMessageReceived.value += strMessage + "\n";  // 一番下に追加
+            }
+        }
+    }
+
+    function setupRTCPeerConnectionEventHandler(_peerConnection) {
+        // Data channel イベントが発生したときのイベントハンドラ
+        // - このイベントは、createDataChannel() を呼び出すリモートピアによって
+        //   RTCDataChannelが接続に追加されたときに送信されます。
+        //   see : https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/ondatachannel
+        _peerConnection.ondatachannel = (event) => {
+            console.log("Event : Data channel");
+
+            // DataChannelオブジェクトをRTCPeerConnectionオブジェクトのメンバーに追加。
+            _peerConnection.rv_datachannel = event.channel;
+            // DataChannelオブジェクトのイベントハンドラの構築
+            console.log("Call : setupDataChannelEventHandler()");
+            setupDataChannelEventHandler(_peerConnection);
+        };
+    }
+
+
     // ---------------------- connection handling -----------------------
     function prepareNewConnection(id) {
         let pc_config = { "iceServers": [] };
-        let peer = new RTCPeerConnection(pc_config);
+        let peerConnection = new RTCPeerConnection(pc_config);
+
+        setupRTCPeerConnectionEventHandler(peerConnection);
+
+        if (g_connect_myself) {
+            var dataChannelOptions = {
+                ordered: false, // do not guarantee order
+                maxRetransmitTime: 3000, // in milliseconds
+            };
+            let datachannel = peerConnection.createDataChannel("my_datachannel", dataChannelOptions);
+            peerConnection.datachannel = datachannel;
+        }
 
         // --- on get remote stream ---
-        if ('ontrack' in peer) {
-            peer.ontrack = function (event) {
+        if ('ontrack' in peerConnection) {
+            peerConnection.ontrack = function (event) {
                 let stream = event.streams[0];
                 console.log('-- peer.ontrack() stream.id=' + stream.id);
                 if (isRemoteVideoAttached(id)) {
@@ -387,7 +478,7 @@
             };
         }
         else {
-            peer.onaddstream = function (event) {
+            peerConnection.onaddstream = function (event) {
                 let stream = event.stream;
                 console.log('-- peer.onaddstream() stream.id=' + stream.id);
                 //playVideo(remoteVideo, stream);
@@ -396,7 +487,7 @@
         }
 
         // --- on get local ICE candidate
-        peer.onicecandidate = function (evt) {
+        peerConnection.onicecandidate = function (evt) {
             if (evt.candidate) {
                 console.log(evt.candidate);
 
@@ -415,37 +506,37 @@
         };
 
         // --- when need to exchange SDP ---
-        peer.onnegotiationneeded = function (evt) {
+        peerConnection.onnegotiationneeded = function (evt) {
             console.log('-- onnegotiationneeded() ---');
         };
 
         // --- other events ----
-        peer.onicecandidateerror = function (evt) {
+        peerConnection.onicecandidateerror = function (evt) {
             console.error('ICE candidate ERROR:', evt);
         };
 
-        peer.onsignalingstatechange = function () {
-            console.log('== signaling status=' + peer.signalingState);
+        peerConnection.onsignalingstatechange = function () {
+            console.log('== signaling status=' + peerConnection.signalingState);
         };
 
-        peer.oniceconnectionstatechange = function () {
-            console.log('== ice connection status=' + peer.iceConnectionState);
-            if (peer.iceConnectionState === 'disconnected') {
+        peerConnection.oniceconnectionstatechange = function () {
+            console.log('== ice connection status=' + peerConnection.iceConnectionState);
+            if (peerConnection.iceConnectionState === 'disconnected') {
                 console.log('-- disconnected --');
                 //hangUp();
                 stopConnection(id);
             }
         };
 
-        peer.onicegatheringstatechange = function () {
-            console.log('==***== ice gathering state=' + peer.iceGatheringState);
+        peerConnection.onicegatheringstatechange = function () {
+            console.log('==***== ice gathering state=' + peerConnection.iceGatheringState);
         };
 
-        peer.onconnectionstatechange = function () {
-            console.log('==***== connection state=' + peer.connectionState);
+        peerConnection.onconnectionstatechange = function () {
+            console.log('==***== connection state=' + peerConnection.connectionState);
         };
 
-        peer.onremovestream = function (event) {
+        peerConnection.onremovestream = function (event) {
             console.log('-- peer.onremovestream()');
             //pauseVideo(remoteVideo);
             deleteRemoteStream(id);
@@ -456,13 +547,13 @@
         // -- add local stream --
         if (localStream) {
             console.log('Adding local stream...');
-            peer.addStream(localStream);
+            peerConnection.addStream(localStream);
         }
         else {
             console.warn('no local stream, but continue.');
         }
 
-        return peer;
+        return peerConnection;
     }
 
     function makeOffer(id) {
@@ -563,6 +654,9 @@
 
     // start PeerConnection
     function connect() {
+
+        g_connect_myself = true;
+
         if (!isReadyToConnect()) {
             console.warn('NOT READY to connect');
         }
