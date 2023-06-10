@@ -427,7 +427,7 @@
             if ("message" === objData.type) {
                 // 受信メッセージをメッセージテキストエリアへ追加
                 let strMessage = objData.data;
-                g_elementTextareaMessageReceived.value = strMessage + "\n" + g_elementTextareaMessageReceived.value; // 一番上に追加
+                g_elementTextareaMessageReceived.value = "[Receive] " + strMessage + "\n" + g_elementTextareaMessageReceived.value; // 一番上に追加
                 //g_elementTextareaMessageReceived.value += strMessage + "\n";  // 一番下に追加
             }
         }
