@@ -7,7 +7,7 @@ srv.listen(port);
 console.log('signaling server started on port:' + port);
 
 
-io.on('connection', function (socket) {
+var textchat = io.of('/textchat').on('connection', function (socket) {
   // ---- multi room ----
   socket.on('enter', function (roomname) {
     socket.join(roomname);
@@ -48,7 +48,7 @@ io.on('connection', function (socket) {
     var target = message.sendto;
     if (target) {
       //console.log('===== message emit to -->' + target);
-      socket.to(target).emit('message', message);
+      textchat.to(target).emit('message', message);
       return;
     }
 

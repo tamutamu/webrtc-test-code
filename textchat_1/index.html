@@ -60,7 +60,7 @@
 
     // ----- use socket.io ---
     let port = 3002;
-    let socket = io.connect('http://localhost:' + port + '/');
+    let socket = io('http://localhost:' + port + '/textchat');
     let room = getRoomName();
 
     socket.on('connect', function (evt) {
